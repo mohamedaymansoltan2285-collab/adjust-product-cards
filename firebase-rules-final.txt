@@ -1,0 +1,73 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection - كل مستخدم يقرأ/يكتب ملفه الشخصي فقط
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+    }
+
+    // Products collection - الجميع يقرأ، فقط الأدمن يكتب
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Orders collection - الطلبات
+    match /orders/{orderId} {
+      // المستخدم يرى طلباته فقط
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // الأدمن يرى جميع الطلبات
+      allow read: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      
+      // السماح بإنشاء طلب جديد للمستخدم المصرح
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      
+      // تحديث الطلب للمستخدم أو الأدمن
+      allow update: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    // Conversations collection - المحادثات (NEW)
+    match /conversations/{conversationId} {
+      // أي مستخدم مسجل يمكنه قراءة المحادثات
+      allow read: if request.auth != null;
+      
+      // أي مستخدم مسجل يمكنه إنشاء محادثة جديدة
+      allow create: if request.auth != null;
+      
+      // الأدمن يمكنه تحديث المحادثات (تحديد الحالة، إغلاق، إلخ)
+      allow update: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Messages collection - الرسائل (NEW)
+    match /messages/{messageId} {
+      // أي مستخدم مسجل يمكنه قراءة الرسائل
+      allow read: if request.auth != null;
+      
+      // أي مستخدم مسجل يمكنه إنشاء رسائل جديدة
+      allow create: if request.auth != null;
+      
+      // الرسائل لا يمكن تحديثها أو حذفها (سجل دائم)
+      allow update, delete: if false;
+    }
+
+    // Product Stats collection - إحصائيات المنتجات
+    match /product_stats/{statId} {
+      allow read: if true;
+      allow create, update: if request.auth != null;
+    }
+
+    // رفض الوصول لأي collections أخرى
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

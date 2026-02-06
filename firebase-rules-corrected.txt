@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users collection - السماح لكل مستخدم بمشاهدة/تعديل ملفه الشخصي فقط
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+    }
+    
+    // Products collection - السماح للجميع بقراءة المنتجات (للزوار)
+    // والسماح فقط للمسؤولين بالكتابة/التعديل/الحذف
+    match /products/{productId} {
+      // أي شخص (حتى غير مسجل) يمكنه قراءة المنتجات
+      allow read: if true;
+      
+      // فقط المسؤولون يمكنهم إضافة/تعديل/حذف المنتجات
+      allow create, update, delete: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Orders collection - الطلبيات
+    match /orders/{orderId} {
+      // كل مستخدم يرى طلباته فقط، والمسؤول يرى جميع الطلبات
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+      
+      // السماح بإنشاء طلب جديد لأي مستخدم مصرح
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // تحديث الطلب لصاحبه أو المسؤول فقط
+      allow update: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+    
+    // رفض الوصول إلى أي collections أخرى
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

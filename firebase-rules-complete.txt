@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* =======================
+       Users Collection
+       ======================= */
+    match /users/{userId} {
+      // كل مستخدم يقرأ ويعدل ملفه فقط
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
+    }
+
+    /* =======================
+       Products Collection
+       ======================= */
+    match /products/{productId} {
+      // السماح للجميع بقراءة المنتجات
+      allow read: if true;
+
+      // فقط الأدمن يمكنه الإضافة أو التعديل أو الحذف
+      allow create, update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.role == 'admin';
+    }
+
+    /* =======================
+       Orders Collection
+       ======================= */
+    match /orders/{orderId} {
+
+      // القراءة: صاحب الطلب أو الأدمن
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid))
+          .data.role == 'admin'
+      );
+
+      // إنشاء طلب: المستخدم ينشئ طلبه فقط
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+
+      // تحديث الطلب: صاحبه أو الأدمن فقط
+      allow update: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid))
+          .data.role == 'admin'
+      );
+
+      // منع الحذف نهائيًا (اختياري للأمان)
+      allow delete: if false;
+    }
+
+    /* =======================
+       Deny All Other Access
+       ======================= */
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

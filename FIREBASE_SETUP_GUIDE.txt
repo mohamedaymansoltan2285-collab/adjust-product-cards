@@ -1,0 +1,201 @@
+==============================================
+دليل إعداد Firebase للمنتج المميز والعروض السريعة
+Firebase Setup Guide for Featured Product & Flash Sales
+==============================================
+
+الخطوة 1: تحديث قواعد Firebase
+==============================
+
+1. اذهب إلى: https://console.firebase.google.com
+2. اختر مشروعك
+3. من القائمة الجانبية اضغط: Firestore Database
+4. اضغط على تاب: Rules
+5. احذف كل القواعد الموجودة واستبدلها بالقواعد التالية:
+
+---START COPY FROM HERE---
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function hasAdminRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+      allow read: if isAuthenticated() && hasAdminRole();
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthenticated() && hasAdminRole();
+    }
+
+    match /orders/{orderId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    match /conversations/{conversationId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        hasAdminRole()
+      );
+      allow delete: if false;
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    match /product_stats/{statId} {
+      allow read: if true;
+      allow create, update: if request.auth != null;
+    }
+
+    match /pointTransactions/{transactionId} {
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        hasAdminRole()
+      );
+      allow create: if request.auth != null;
+      allow update, delete: if hasAdminRole();
+    }
+
+    match /referrals/{referralId} {
+      allow read: if request.auth != null && (
+        resource.data.referrerId == request.auth.uid ||
+        hasAdminRole()
+      );
+      allow create: if request.auth != null;
+      allow update, delete: if hasAdminRole();
+    }
+
+    match /rewards/{rewardId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null && hasAdminRole();
+    }
+
+    match /redemptions/{redemptionId} {
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        hasAdminRole()
+      );
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && hasAdminRole();
+      allow delete: if hasAdminRole();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+---END COPY HERE---
+
+6. اضغط على زر "Publish" لتطبيق القواعد
+
+
+الخطوة 2: إنشاء المستندات الأولية في Firestore
+============================================
+
+1. في نفس الصفحة (Firestore Database)
+2. اضغط على تاب "Data"
+3. اضغط "Start collection" أو "+ Start collection"
+4. اسم الـ Collection: settings
+5. اضغط Next
+
+
+إنشاء المستند الأول - المنتج المميز:
+------------------------------------
+
+Document ID: featuredProduct
+
+أضف الحقول التالية (اضغط Add field لكل حقل):
+
+Field Name         | Type      | Value
+------------------|-----------|------------------
+productId         | string    | (اتركه فارغ)
+titleAr           | string    | (اتركه فارغ)
+titleEn           | string    | (اتركه فارغ)
+descriptionAr     | string    | (اتركه فارغ)
+descriptionEn     | string    | (اتركه فارغ)
+badges            | array     | (اتركه فارغ)
+isActive          | boolean   | false
+
+اضغط Save
+
+
+إنشاء المستند الثاني - العروض السريعة:
+--------------------------------------
+
+في نفس الـ collection (settings)، اضغط "Add document"
+
+Document ID: flashSale
+
+أضف الحقول التالية:
+
+Field Name         | Type      | Value
+------------------|-----------|------------------
+titleAr           | string    | عروض سريعة
+titleEn           | string    | Flash Sale
+discountPercent   | number    | 20
+startDate         | timestamp | (اختر التاريخ والوقت الحالي)
+endDate           | timestamp | (اختر تاريخ بعد أسبوع من الآن)
+productIds        | array     | (اتركه فارغ)
+isActive          | boolean   | false
+
+اضغط Save
+
+
+الخطوة 3: التحقق من النجاح
+==========================
+
+1. ارجع لتطبيقك
+2. سجل دخول كأدمن
+3. اذهب إلى Dashboard
+4. ستجد تابين جديدين:
+   - "المنتج المميز" / "Featured Product"
+   - "العروض السريعة" / "Flash Sale"
+5. من هذه التابات يمكنك:
+   - اختيار المنتج المميز وتخصيصه
+   - إنشاء عروض سريعة جديدة
+
+
+ملاحظات مهمة:
+=============
+
+- تأكد من أنك مسجل دخول كأدمن (role: 'admin' في users collection)
+- إذا لم تظهر التابات، تحقق من أن قواعد Firebase تم نشرها بنجاح
+- إذا واجهت مشاكل في الصلاحيات، تحقق من Console في المتصفح (F12)
+- المنتج المميز والعروض السريعة تظهر فقط عند تفعيلها (isActive: true)

@@ -1,0 +1,77 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection - كل مستخدم يقرأ/يكتب ملفه الشخصي فقط
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+      // الأدمن يقرأ جميع المستخدمين
+      allow read: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Products collection - الجميع يقرأ، فقط الأدمن يكتب
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Settings collection - للإعدادات العامة (المنتج المميز، العروض السريعة، إلخ)
+    match /settings/{settingId} {
+      // الجميع يقرأ الإعدادات
+      allow read: if true;
+      // فقط الأدمن يكتب
+      allow create, update, delete: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Orders collection - الطلبات
+    match /orders/{orderId} {
+      // المستخدم يرى طلباته فقط
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // الأدمن يرى جميع الطلبات
+      allow read: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      
+      // السماح بإنشاء طلب جديد للمستخدم المصرح
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      
+      // تحديث الطلب للمستخدم أو الأدمن
+      allow update: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    // Conversations collection - المحادثات
+    match /conversations/{conversationId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Messages collection - الرسائل
+    match /messages/{messageId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if false;
+    }
+
+    // Product Stats collection - إحصائيات المنتجات
+    match /product_stats/{statId} {
+      allow read: if true;
+      allow create, update: if request.auth != null;
+    }
+
+    // Notifications collection - الإشعارات
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+  }
+}

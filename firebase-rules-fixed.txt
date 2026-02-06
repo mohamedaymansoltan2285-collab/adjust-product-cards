@@ -1,0 +1,110 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function hasAdminRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Users collection - كل مستخدم يقرأ/يكتب ملفه الشخصي فقط
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+      allow read: if isAuthenticated() && hasAdminRole();
+    }
+
+    // Products collection - الجميع يقرأ، فقط الأدمن يكتب
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Orders collection - الطلبات
+    match /orders/{orderId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    // ============ نظام الإشعارات ============
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    // ============ نظام المحادثات ============
+    match /conversations/{conversationId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        hasAdminRole()
+      );
+      allow delete: if false;
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    // ============ إحصائيات المنتجات ============
+    match /product_stats/{statId} {
+      allow read: if true;
+      allow create, update: if request.auth != null;
+    }
+
+    // ============ نظام الولاء والمكافآت ============
+    
+    match /pointTransactions/{transactionId} {
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        hasAdminRole()
+      );
+      allow create: if request.auth != null;
+      allow update, delete: if hasAdminRole();
+    }
+
+    match /referrals/{referralId} {
+      allow read: if request.auth != null && (
+        resource.data.referrerId == request.auth.uid ||
+        hasAdminRole()
+      );
+      allow create: if request.auth != null;
+      allow update, delete: if hasAdminRole();
+    }
+
+    match /rewards/{rewardId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null && hasAdminRole();
+    }
+
+    match /redemptions/{redemptionId} {
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        hasAdminRole()
+      );
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && hasAdminRole();
+      allow delete: if hasAdminRole();
+    }
+
+    // ============ قاعدة افتراضية - رفض كل شيء آخر ============
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

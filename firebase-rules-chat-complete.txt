@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection - كل مستخدم يرى ملفه الشخصي فقط
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+    }
+
+    // Products collection - للجميع قراءة، والمسؤولون فقط يكتبون
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Orders collection - كل مستخدم يرى طلباته فقط، والمسؤولون يرون الكل
+    match /orders/{orderId} {
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    // Conversations collection - المحادثات
+    match /conversations/{conversationId} {
+      // أي مستخدم مصرح يستطيع قراءة المحادثات
+      allow read: if request.auth != null;
+      
+      // أي مستخدم يستطيع إنشاء محادثة جديدة
+      allow create: if request.auth != null;
+      
+      // تحديث المحادثة (لأي شخص مصرح أو المسؤول)
+      allow update: if request.auth != null;
+    }
+
+    // Messages collection - الرسائل
+    match /messages/{messageId} {
+      // أي مستخدم مصرح يستطيع قراءة الرسائل
+      allow read: if request.auth != null;
+      
+      // أي مستخدم يستطيع إنشاء رسالة جديدة
+      allow create: if request.auth != null;
+      
+      // تحديث الرسالة
+      allow update: if request.auth != null;
+    }
+
+    // product_stats collection - إحصائيات المنتجات
+    match /product_stats/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // رفض الوصول لأي مجموعات أخرى
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
